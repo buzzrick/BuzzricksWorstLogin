@@ -13,7 +13,7 @@ namespace WorstLogin
         public float fallSpeed = 10f;
         private char _character;
 
-        public Action<LetterSquare> OnDestroyRequest;
+        public event Action<LetterSquare> OnDestroyRequest;
         private Camera _camera;
         private Rigidbody2D _rigidBody;
 
@@ -51,7 +51,11 @@ namespace WorstLogin
         public void RequestDestroy()
         {
             OnDestroyRequest?.Invoke(this);
-            OnDestroyRequest = null;
+        }
+
+        public override string ToString()
+        {
+            return $"LetterSquare: {Character}";
         }
     }
 }

@@ -8,9 +8,15 @@ namespace WorstLogin
         private ObjectPool<LetterSquare> _letterSquarePool;
         [SerializeField] private LetterSquare _letterSquarePrefab;
 
-        public LetterSquarePool()
+        private void Awake()
         {
-            _letterSquarePool = new ObjectPool<LetterSquare>(CreateLetterSquare, OnGetLetterSquare, OnReleaseLetterSquare, OnDestroyLetterSquare, false, 26);
+            _letterSquarePool = new ObjectPool<LetterSquare>(
+                CreateLetterSquare,
+                OnGetLetterSquare,
+                OnReleaseLetterSquare,
+                OnDestroyLetterSquare,
+                true,   // set true during development to add extra error checking, but false in production
+                26);
         }
 
         private LetterSquare CreateLetterSquare()

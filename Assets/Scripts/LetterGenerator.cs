@@ -4,7 +4,6 @@ using System.Threading;
 using Cysharp.Threading.Tasks;
 using Runaway.Extensions;
 using UnityEngine;
-using Random = UnityEngine.Random;
 
 namespace WorstLogin
 {
@@ -15,7 +14,7 @@ namespace WorstLogin
         private Vector3 _screenBottomLeft;
         private Vector3 _screenTopRight;
         private CancellationTokenSource _letterCreationLoopCancellationSource = new();
-        private const float SpawnRate = 5f;
+        private const float SpawnRate = 4f;
         private float _spawnDelay = 0.25f;
 
         private void Awake()
@@ -35,10 +34,17 @@ namespace WorstLogin
             
             _screenBottomLeft = mainCamera.ScreenToWorldPoint(new Vector3(0, 0, mainCamera.nearClipPlane));
             _screenTopRight = mainCamera.ScreenToWorldPoint(new Vector3(Screen.width, Screen.height, mainCamera.nearClipPlane));
+            
+            //  shrink the edges of the screen to make it easier to see the letters, by about 5%    
+            float shrinkFactor = 0.05f;
+            float width = _screenTopRight.x - _screenBottomLeft.x;
+            _screenBottomLeft.x += width * shrinkFactor;
+            _screenTopRight.x -= width * shrinkFactor;
         }
 
         public void SetLetterCollection(LetterSet letterSet)
         {
+            CleanupAllLetters();
             _letterCreationLoopCancellationSource.Cancel();
             _letterCreationLoopCancellationSource = new CancellationTokenSource();
             LetterCreationLoop(letterSet, false, _letterCreationLoopCancellationSource.Token).Forget();
@@ -46,8 +52,10 @@ namespace WorstLogin
         
         private void CleanupAllLetters()
         {
-            foreach (var letterSquare in _letterSquares)
+            var allLetters = new List<LetterSquare>(_letterSquares);
+            foreach (var letterSquare in allLetters)
             {
+                letterSquare.OnDestroyRequest -= DestroyLetterSquare;
                 _letterSquarePool.Release(letterSquare);
             }
             _letterSquares.Clear();
@@ -55,58 +63,65 @@ namespace WorstLogin
 
         private async UniTask LetterCreationLoop(LetterSet letterSet, bool randomised, CancellationToken cancellationToken)
         {
-            //randomised = true;
             CleanupAllLetters();
-            char[] letters =
-                randomised
-                    ? LetterSetCollections.Collections[letterSet].Shuffle().ToArray()
-                    : LetterSetCollections.Collections[letterSet];
-			int[] indexShuffler = new int[letters.Length];
-            for (int i = 0; i < indexShuffler.Length; i++)
-            {
-                indexShuffler[i] = i;
-            }
-            indexShuffler = indexShuffler.Shuffle().ToArray();
-
+            
+            char[] letters = LetterSetCollections.Collections[letterSet];
             int letterCount = letters.Length;
-            int currentLetterIndex = 0;
-            _spawnDelay = SpawnRate / letterCount;
             
-            Debug.Log($"Starting letter creation loop with {letterCount} letters, randomised: {randomised}, _spawnDelay: {_spawnDelay}");
-            
-            float nextSpawnTime = Time.time;
+            // Create an array of indices and shuffle it to randomize the spawn order.
+            int[] spawnOrder = new int[letterCount];
+            for (int i = 0; i < letterCount; i++)
+            {
+                spawnOrder[i] = i;
+            }
+            //spawnOrder = spawnOrder.Shuffle().ToArray();
 
+            _spawnDelay = SpawnRate / letterCount;
+            float letterSpacing = (_screenTopRight.x - _screenBottomLeft.x) / (letterCount - 1);
+            
+            Debug.Log($"Starting letter creation loop with {letterCount} letters. Spawn delay: {_spawnDelay}s");
+
+            int spawnIndex = 0;
             while (!cancellationToken.IsCancellationRequested)
             {
-                while (Time.time >= nextSpawnTime && !cancellationToken.IsCancellationRequested)
+                // Get the randomised letter to spawn next.
+                int letterIndex = spawnOrder[spawnIndex];
+                char currentLetter = letters[letterIndex];
+
+                LetterSquare letterSquare = CreateLetter(currentLetter);
+
+                // Position the letter based on its original, unshuffled index.
+                letterSquare.transform.position = new Vector3(_screenBottomLeft.x + (letterIndex * letterSpacing), _screenTopRight.y, 0);
+
+                // Wait for the spawn delay before spawning the next letter.
+                await UniTask.Delay(TimeSpan.FromSeconds(_spawnDelay), cancellationToken: cancellationToken);
+
+                spawnIndex++;
+                if (spawnIndex >= letterCount)
                 {
-                    var letterSquare = _letterSquarePool.Get();
-                    int letterIndex = indexShuffler[currentLetterIndex];
-                    char currentLetter = letters[letterIndex];
-                    letterSquare.Character = currentLetter;
-                    letterSquare.OnDestroyRequest += DestroyLetterSquare;
-                    _letterSquares.Add(letterSquare);
+                    // Reshuffle for the next loop.
+                    spawnIndex = 0;
                     if (randomised)
                     {
-                        letterSquare.transform.position =
-                            new Vector3(Random.Range(_screenBottomLeft.x, _screenTopRight.x), _screenTopRight.y, 0);
+                        //spawnOrder = spawnOrder.Shuffle().ToArray();
                     }
-                    else
-                    {
-                        float letterSpacing = (_screenTopRight.x - _screenBottomLeft.x) / (letterCount - 1);
-                        letterSquare.transform.position = new Vector3(_screenBottomLeft.x + (letterIndex * letterSpacing), _screenTopRight.y, 0);
-                    }
-    
-                    currentLetterIndex = (currentLetterIndex + 1) % letterCount;
-                    nextSpawnTime += _spawnDelay;
                 }
-
-                await UniTask.Yield(PlayerLoopTiming.Update, cancellationToken);
             }
+        }
+
+        private LetterSquare CreateLetter(char currentLetter)
+        {
+            var letterSquare = _letterSquarePool.Get();
+            Debug.Log($"Spawning letter: {currentLetter}", letterSquare);
+            letterSquare.Character = currentLetter;
+            letterSquare.OnDestroyRequest += DestroyLetterSquare;
+            _letterSquares.Add(letterSquare);
+            return letterSquare;
         }
 
         private void DestroyLetterSquare(LetterSquare letterSquare)
         {
+            letterSquare.OnDestroyRequest -= DestroyLetterSquare;
             _letterSquares.Remove(letterSquare);
             _letterSquarePool.Release(letterSquare);
         }
