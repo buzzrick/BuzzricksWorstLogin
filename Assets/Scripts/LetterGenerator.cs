@@ -83,7 +83,7 @@ namespace WorstLogin
                     var letterSquare = _letterSquarePool.Get();
                     int letterIndex = indexShuffler[currentLetterIndex];
                     char currentLetter = letters[letterIndex];
-                    letterSquare.SetCharacter(currentLetter);
+                    letterSquare.Character = currentLetter;
                     letterSquare.OnDestroyRequest += DestroyLetterSquare;
                     _letterSquares.Add(letterSquare);
                     if (randomised)

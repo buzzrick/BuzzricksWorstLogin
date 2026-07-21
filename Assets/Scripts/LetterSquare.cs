@@ -5,29 +5,53 @@ using UnityEngine.UI;
 
 namespace WorstLogin
 {
+    [RequireComponent(typeof(Collider2D))]
     public class LetterSquare : MonoBehaviour
     {
         public Image Image;
         public TMP_Text Text;
         public float fallSpeed = 10f;
-        
+        private char _character;
+
         public Action<LetterSquare> OnDestroyRequest;
         private Camera _camera;
-        
-        public void SetCharacter(char character)
+        private Rigidbody2D _rigidBody;
+
+        private void Awake()
         {
-            Text.text = character.ToString();
+            _rigidBody = GetComponent<Rigidbody2D>();
             _camera = Camera.main;
         }
 
-        private void Update()
+
+        public char Character
         {
-            transform.position += Vector3.down * fallSpeed * Time.deltaTime;
-            if (transform.position.y < -_camera.orthographicSize)
+            get
             {
-                OnDestroyRequest?.Invoke(this);
-                OnDestroyRequest = null;
+                return _character; 
             }
+            set
+            {
+                _character = value;
+                Text.text = _character.ToString();
+            }
+        }
+
+        private void FixedUpdate()
+        {
+            var newPosition = _rigidBody.position + Vector2.down * (fallSpeed * Time.fixedDeltaTime);
+            _rigidBody.MovePosition(newPosition);
+            
+            if (newPosition.y < -_camera.orthographicSize)
+            {
+                RequestDestroy();
+            }
+        }
+
+        public void RequestDestroy()
+        {
+            OnDestroyRequest?.Invoke(this);
+            OnDestroyRequest = null;
         }
     }
 }
